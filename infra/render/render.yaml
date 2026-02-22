@@ -91,6 +91,6 @@ services:
 
 databases:
   - name: gemindex-postgres
-    plan: starter
+    plan: basic_256mb
     databaseName: gemindex
     user: gemindex
