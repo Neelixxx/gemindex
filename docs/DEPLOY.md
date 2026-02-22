@@ -28,12 +28,31 @@ Use `infra/render/render.yaml` to provision:
    - `TCGPLAYER_PRIVATE_KEY`
    - `RESEND_API_KEY`
    - `EMAIL_FROM`
+   - `STRIPE_SECRET_KEY`
+   - `STRIPE_WEBHOOK_SECRET`
+   - `STRIPE_PRICE_PRO_MONTHLY`
+   - `STRIPE_PRICE_ELITE_MONTHLY`
 4. After first deploy, run Prisma migration against managed Postgres:
    - `npx prisma migrate deploy`
 5. Verify health:
    - `GET /api/health`
 6. Verify worker:
    - `POST /api/jobs/worker?token=<CRON_SECRET>`
+
+## Stripe Setup
+
+1. Create recurring Stripe Prices for Pro and Elite plans.
+2. Copy the two Price IDs into:
+   - `STRIPE_PRICE_PRO_MONTHLY`
+   - `STRIPE_PRICE_ELITE_MONTHLY`
+3. In Stripe Dashboard, add webhook endpoint:
+   - `https://<your-app-domain>/api/billing/webhook`
+4. Subscribe webhook events:
+   - `checkout.session.completed`
+   - `customer.subscription.created`
+   - `customer.subscription.updated`
+   - `customer.subscription.deleted`
+5. Copy webhook signing secret into `STRIPE_WEBHOOK_SECRET`.
 
 ## CI/CD
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { requireUser } from "@/lib/auth";
 import { featureSnapshot, subscriptionStatus, subscriptionTier } from "@/lib/entitlements";
+import { stripeConfigured, stripePricesConfigured } from "@/lib/stripe";
 
 export const runtime = "nodejs";
 
@@ -20,6 +21,7 @@ export async function GET(request: NextRequest) {
       currentPeriodEnd: user.subscriptionCurrentPeriodEnd,
       trialEndsAt: user.trialEndsAt,
     },
+    provider: stripeConfigured() && stripePricesConfigured() ? "STRIPE" : "MANUAL",
     features: featureSnapshot(user),
   });
 }

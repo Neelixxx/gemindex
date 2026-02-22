@@ -28,6 +28,7 @@ Gem Index is a Pokemon TCG analytics app for grading-aware investing.
 - Billing tiers + feature gating:
   - `FREE`, `PRO`, `ELITE`
   - role + subscription entitlement checks in API and app UI
+  - Stripe Checkout + Billing Portal + Webhook sync (with manual fallback in dev when Stripe keys are absent)
 
 ## Stack
 
@@ -82,6 +83,10 @@ Key ones:
 - `RESEND_API_KEY`
 - `EMAIL_FROM`
 - `LOG_LEVEL`
+- `STRIPE_SECRET_KEY`
+- `STRIPE_WEBHOOK_SECRET`
+- `STRIPE_PRICE_PRO_MONTHLY`
+- `STRIPE_PRICE_ELITE_MONTHLY`
 
 ## Background sync architecture
 
@@ -148,7 +153,10 @@ Password reset:
 Billing:
 
 - `GET /api/billing/status`
+- `POST /api/billing/checkout`
 - `POST /api/billing/subscribe`
+- `POST /api/billing/portal`
+- `POST /api/billing/webhook`
 
 Dev outbox (admin):
 

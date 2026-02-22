@@ -164,6 +164,14 @@ export function GemIndexApp() {
     if (upgradeError) {
       setMessage(upgradeError);
     }
+    const billingState = params.get("billing");
+    if (billingState === "success") {
+      setMessage("Billing updated successfully.");
+    } else if (billingState === "cancel") {
+      setMessage("Checkout canceled.");
+    } else if (billingState === "portal_return") {
+      setMessage("Returned from billing portal.");
+    }
   }, []);
 
   useEffect(() => {
@@ -220,17 +228,38 @@ export function GemIndexApp() {
   async function changePlan(tier: "FREE" | "PRO" | "ELITE") {
     try {
       setPlanBusy(true);
-      const out = await api<{ user: PublicUser }>("/api/billing/subscribe", {
+      const out = await api<{ user?: PublicUser; checkoutUrl?: string; mode?: string }>(
+        "/api/billing/subscribe",
+        {
         method: "POST",
         body: JSON.stringify({ tier, action: tier === "FREE" ? "downgrade" : "upgrade" }),
-      });
-      setUser(out.user);
-      await refresh(out.user.role === "ADMIN");
-      setMessage(`Plan updated to ${tier}.`);
+      },
+      );
+      if (out.checkoutUrl) {
+        window.location.href = out.checkoutUrl;
+        return;
+      }
+      if (out.user) {
+        setUser(out.user);
+        await refresh(out.user.role === "ADMIN");
+      }
+      setMessage(out.mode === "manual" ? `Plan updated to ${tier} (manual mode).` : `Plan updated to ${tier}.`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not update plan.");
     } finally {
       setPlanBusy(false);
+    }
+  }
+
+  async function openBillingPortal() {
+    try {
+      const out = await api<{ url: string }>("/api/billing/portal", {
+        method: "POST",
+        body: "{}",
+      });
+      window.location.href = out.url;
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not open billing portal.");
     }
   }
 
@@ -554,6 +583,12 @@ export function GemIndexApp() {
             disabled={planBusy}
           >
             Elite
+          </button>
+          <button
+            className="rounded border border-emerald-300 bg-emerald-50 px-3 py-1 text-sm"
+            onClick={openBillingPortal}
+          >
+            Billing Portal
           </button>
         </div>
       </section>

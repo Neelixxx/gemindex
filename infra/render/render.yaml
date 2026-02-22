@@ -28,6 +28,14 @@ services:
         generateValue: true
       - key: LOG_LEVEL
         value: info
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_PRICE_PRO_MONTHLY
+        sync: false
+      - key: STRIPE_PRICE_ELITE_MONTHLY
+        sync: false
 
   - type: worker
     name: gemindex-worker
@@ -57,6 +65,12 @@ services:
       - key: SESSION_SECRET
         sync: false
       - key: CRON_SECRET
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_PRICE_PRO_MONTHLY
+        sync: false
+      - key: STRIPE_PRICE_ELITE_MONTHLY
         sync: false
 
   - type: cron

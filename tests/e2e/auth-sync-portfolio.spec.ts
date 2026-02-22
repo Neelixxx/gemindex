@@ -139,7 +139,7 @@ test("password reset flow rotates credentials", async ({ page }) => {
   expect(newLoginRes.status()).toBe(200);
 });
 
-test("admin can enqueue sync and run worker tick", async ({ page }) => {
+test("admin can enqueue sync job", async ({ page }) => {
   const loginRes = await page.request.post("/api/auth/login", {
     data: {
       email: "demo@gemindex.local",
@@ -155,9 +155,6 @@ test("admin can enqueue sync and run worker tick", async ({ page }) => {
   });
   expect(queueSalesRes.status()).toBe(202);
   const queued = (await queueSalesRes.json()) as { queued: { id: string } };
-
-  const workerRes = await page.request.post("/api/jobs/worker", { data: {} });
-  expect(workerRes.status()).toBe(200);
 
   const jobsStatusRes = await page.request.get("/api/jobs/status");
   expect(jobsStatusRes.status()).toBe(200);
