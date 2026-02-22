@@ -141,6 +141,18 @@ curl -X POST "http://localhost:3000/api/jobs/worker?token=$CRON_SECRET"
 Operational runbook: `docs/OPERATIONS.md`
 Deployment runbook: `docs/DEPLOY.md`
 
+### Render sanity check
+
+If your Render URL shows a "Create Next App" page, the service is pointing to the wrong repo/config.
+
+- Expected app URL: `https://gemindex.onrender.com`
+- Expected health endpoint: `https://gemindex.onrender.com/api/health` (JSON response, not 404)
+- Correct Render commands:
+  - Build: `npm ci && npm run build`
+  - Start: `npm run start`
+- Quick verification command:
+  - `npm run verify:deploy -- https://gemindex.onrender.com`
+
 ## API routes
 
 Public analytics:

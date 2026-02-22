@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: gemindex-web
+    name: gemindex
     env: node
     plan: starter
     rootDir: .
@@ -12,7 +12,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: APP_URL
-        value: https://gemindex-web.onrender.com
+        value: https://gemindex.onrender.com
       - key: DATABASE_URL
         fromDatabase:
           name: gemindex-postgres
@@ -49,10 +49,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: APP_URL
-        fromService:
-          type: web
-          name: gemindex-web
-          property: host
+        value: https://gemindex.onrender.com
       - key: DATABASE_URL
         fromDatabase:
           name: gemindex-postgres
@@ -82,7 +79,7 @@ services:
     buildCommand: npm ci
     startCommand: >
       curl --fail --silent --show-error
-      -X POST "https://gemindex-web.onrender.com/api/jobs/worker?token=$CRON_SECRET"
+      -X POST "https://gemindex.onrender.com/api/jobs/worker?token=$CRON_SECRET"
     envVars:
       - key: CRON_SECRET
         sync: false

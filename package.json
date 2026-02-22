@@ -12,6 +12,7 @@
     "db:import-json": "tsx scripts/import-json-to-postgres.ts",
     "worker": "tsx src/worker/index.ts",
     "worker:once": "tsx src/worker/once.ts",
+    "verify:deploy": "node scripts/verify-deploy.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",

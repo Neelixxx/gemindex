@@ -13,6 +13,21 @@ export interface BarcodeDetection {
   format: string;
 }
 
+type JimpBitmap = {
+  data: Uint8Array | Buffer;
+  width: number;
+  height: number;
+};
+
+type JimpLike = {
+  bitmap: JimpBitmap;
+  clone(): JimpLike;
+  greyscale(): JimpLike;
+  contrast(value: number): JimpLike;
+  rotate(degrees: number): JimpLike;
+  resize(options: { w: number }): JimpLike;
+};
+
 function readerWithHints(): MultiFormatReader {
   const reader = new MultiFormatReader();
   const hints = new Map();
@@ -31,7 +46,7 @@ function readerWithHints(): MultiFormatReader {
   return reader;
 }
 
-function bitmapFromJimp(image: any): BinaryBitmap {
+function bitmapFromJimp(image: JimpLike): BinaryBitmap {
   const { data, width, height } = image.bitmap;
   const luminances = new Uint8ClampedArray(width * height);
   for (let i = 0; i < width * height; i += 1) {
@@ -40,7 +55,7 @@ function bitmapFromJimp(image: any): BinaryBitmap {
   return new BinaryBitmap(new HybridBinarizer(new RGBLuminanceSource(luminances, width, height)));
 }
 
-function decodeOne(reader: MultiFormatReader, image: any): BarcodeDetection | null {
+function decodeOne(reader: MultiFormatReader, image: JimpLike): BarcodeDetection | null {
   try {
     const decoded = reader.decode(bitmapFromJimp(image));
     const value = decoded.getText()?.trim();
@@ -58,10 +73,10 @@ function decodeOne(reader: MultiFormatReader, image: any): BarcodeDetection | nu
 
 export async function detectBarcodesFromImage(file: File): Promise<BarcodeDetection[]> {
   const bytes = await file.arrayBuffer();
-  const source = await Jimp.read(Buffer.from(bytes));
+  const source = (await Jimp.read(Buffer.from(bytes))) as unknown as JimpLike;
   const reader = readerWithHints();
 
-  const variants: any[] = [
+  const variants: JimpLike[] = [
     source.clone(),
     source.clone().greyscale(),
     source.clone().greyscale().contrast(0.15),
