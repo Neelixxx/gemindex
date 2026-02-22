@@ -1,4 +1,5 @@
 import { cardIndexSeries, cardMetrics } from "@/lib/analytics";
+import { assessDataQuality } from "@/lib/data-quality";
 import { readDb } from "@/lib/db";
 import { requireServerFeature } from "@/lib/server-auth";
 import { AnalyticsNav } from "@/components/analytics-nav";
@@ -12,6 +13,8 @@ function usd(value: number): string {
 export default async function PortfolioPerformancePage() {
   const user = await requireServerFeature("PORTFOLIO_TRACKING");
   const db = await readDb();
+  const dataQuality = assessDataQuality(db);
+  const investmentMetricsReady = dataQuality.investmentMetricsReady;
   const metrics = cardMetrics(db);
   const metricByCard = new Map(metrics.map((entry) => [entry.cardId, entry]));
 
@@ -52,7 +55,7 @@ export default async function PortfolioPerformancePage() {
     .filter((item) => item.userId === user?.id)
     .reduce((sum, item) => sum + (item.estimatedValueUsd ?? 0) * item.quantity, 0);
 
-  const index = cardIndexSeries(db);
+  const index = investmentMetricsReady ? cardIndexSeries(db) : [];
   const indexStart = index[0]?.value ?? 100;
   const indexEnd = index[index.length - 1]?.value ?? 100;
   const benchmarkRoi = ((indexEnd - indexStart) / indexStart) * 100;
@@ -64,14 +67,17 @@ export default async function PortfolioPerformancePage() {
       <section className="rounded-2xl border border-slate-200 bg-white p-4">
         <h1 className="text-2xl font-semibold">Portfolio Performance</h1>
         <p className="text-sm text-slate-600">Cost basis, mark-to-market P/L, and benchmark versus Card Index.</p>
+        {!investmentMetricsReady ? <p className="mt-2 text-sm text-amber-700">{dataQuality.blockingReason}</p> : null}
       </section>
 
       <section className="grid gap-3 md:grid-cols-5">
-        <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm">Collection MV: {usd(portfolioValue)}</div>
-        <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm">Sealed MV: {usd(sealedValue)}</div>
+        <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm">Collection MV: {investmentMetricsReady ? usd(portfolioValue) : "Pending"}</div>
+        <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm">Sealed MV: {investmentMetricsReady ? usd(sealedValue) : "Pending"}</div>
         <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm">Cost Basis: {usd(costBasis)}</div>
-        <div className={`rounded-xl border border-slate-200 bg-white p-3 text-sm ${pnl >= 0 ? "text-emerald-700" : "text-rose-700"}`}>P/L: {usd(pnl)}</div>
-        <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm">Portfolio ROI {portfolioRoi.toFixed(2)}% | Index ROI {benchmarkRoi.toFixed(2)}%</div>
+        <div className={`rounded-xl border border-slate-200 bg-white p-3 text-sm ${pnl >= 0 ? "text-emerald-700" : "text-rose-700"}`}>P/L: {investmentMetricsReady ? usd(pnl) : "Pending"}</div>
+        <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm">
+          {investmentMetricsReady ? `Portfolio ROI ${portfolioRoi.toFixed(2)}% | Index ROI ${benchmarkRoi.toFixed(2)}%` : "ROI metrics pending live data readiness."}
+        </div>
       </section>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-4">
@@ -81,9 +87,9 @@ export default async function PortfolioPerformancePage() {
             <div key={row.id} className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr] border-b py-1">
               <span>{row.label}</span>
               <span>x{row.quantity}</span>
-              <span>{usd(row.marketValue)}</span>
+              <span>{investmentMetricsReady ? usd(row.marketValue) : "Pending"}</span>
               <span>{usd(row.costBasis)}</span>
-              <span className={row.pnl >= 0 ? "text-emerald-700" : "text-rose-700"}>{usd(row.pnl)}</span>
+              <span className={row.pnl >= 0 ? "text-emerald-700" : "text-rose-700"}>{investmentMetricsReady ? usd(row.pnl) : "Pending"}</span>
             </div>
           ))}
         </div>

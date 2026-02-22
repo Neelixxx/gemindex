@@ -48,6 +48,9 @@ describe("analytics", () => {
 
     expect(summary.totalTrackedCards).toBe(db.cards.length);
     expect(summary.totalSets).toBe(db.sets.length);
-    expect(summary.cardIndex.length).toBeGreaterThan(0);
+    expect(summary.cardIndex.length).toBe(0);
+    expect(summary.dataQuality.status).toBe("SEEDED");
+    expect(summary.dataQuality.investmentMetricsReady).toBe(false);
+    expect(summary.dataQuality.blockingReason).toContain("Investment metrics are hidden");
   });
 });

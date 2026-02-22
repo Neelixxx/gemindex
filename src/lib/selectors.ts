@@ -3,6 +3,7 @@ import type {
   CollectionItemRecord,
   GemIndexDatabase,
   SealedInventoryRecord,
+  SealedWishlistItemRecord,
   WishlistItemRecord,
 } from "./types";
 
@@ -49,6 +50,22 @@ export function enrichWishlist(db: GemIndexDatabase, userId: string): Array<Wish
 
 export function enrichSealed(db: GemIndexDatabase, userId: string): Array<SealedInventoryRecord & { setCode: string; setName: string }> {
   return db.sealedInventoryItems
+    .filter((item) => item.userId === userId)
+    .map((item) => {
+      const set = db.sets.find((entry) => entry.id === item.setId);
+      return {
+        ...item,
+        setCode: set?.code ?? "unknown",
+        setName: set?.name ?? "Unknown Set",
+      };
+    });
+}
+
+export function enrichSealedWishlist(
+  db: GemIndexDatabase,
+  userId: string,
+): Array<SealedWishlistItemRecord & { setCode: string; setName: string }> {
+  return db.sealedWishlistItems
     .filter((item) => item.userId === userId)
     .map((item) => {
       const set = db.sets.find((entry) => entry.id === item.setId);

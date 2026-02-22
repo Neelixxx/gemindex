@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 
-import type { DashboardData, PublicUser, SetMetrics, SyncState } from "@/lib/types";
+import type { DashboardData, DataQualitySnapshot, PublicUser, SetMetrics, SyncState } from "@/lib/types";
 
 type CardApi = {
   cardId: string;
@@ -12,6 +12,16 @@ type CardApi = {
   rawPrice: number;
   gemRateBlended: number;
   liquidityScore: number;
+};
+
+type CardsResponse = {
+  items: CardApi[];
+  dataQuality: DataQualitySnapshot;
+};
+
+type SetsResponse = {
+  items: SetMetrics[];
+  dataQuality: DataQualitySnapshot;
 };
 
 type SyncStatus = {
@@ -59,6 +69,34 @@ type SealedItem = {
   estimatedValueUsd?: number;
 };
 
+type SealedWishlistItem = {
+  id: string;
+  productName: string;
+  setCode: string;
+  priority: number;
+  targetPriceUsd?: number;
+};
+
+type ImageScanResponse = {
+  destination: "COLLECTION" | "WISHLIST" | "PRICE_CHECK";
+  itemKind: "RAW_CARD" | "GRADED_SLAB" | "SEALED_PRODUCT" | "UNKNOWN";
+  ocr: { text: string; confidence: number };
+  barcode?: { value: string; format?: string; detectedCount?: number } | null;
+  slab?: { grader?: "PSA" | "TAG"; grade?: number };
+  sealed?: { productType?: string; productName?: string } | null;
+  match?: {
+    confidence: number;
+    reason: string;
+    card?: { name?: string; cardNumber?: string; setCode?: string } | null;
+  } | null;
+  setMatch?: { id?: string; name?: string; code?: string; confidence?: number; reason?: string } | null;
+  priceCheck?: {
+    card?: { raw?: number; psa10?: number; tag10?: number; gemRateBlended?: number } | null;
+    set?: { name?: string; totalSetValue?: number } | null;
+    sealedEstimateUsd?: number | null;
+  } | null;
+};
+
 type OutboxEmail = {
   id: string;
   to: string;
@@ -103,15 +141,18 @@ export function GemIndexApp() {
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [cards, setCards] = useState<CardApi[]>([]);
   const [sets, setSets] = useState<SetMetrics[]>([]);
+  const [dataQuality, setDataQuality] = useState<DataQualitySnapshot | null>(null);
   const [sync, setSync] = useState<SyncStatus | null>(null);
   const [collection, setCollection] = useState<CollectionItem[]>([]);
   const [wishlist, setWishlist] = useState<WishlistItem[]>([]);
   const [sealed, setSealed] = useState<SealedItem[]>([]);
+  const [sealedWishlist, setSealedWishlist] = useState<SealedWishlistItem[]>([]);
   const [outbox, setOutbox] = useState<OutboxEmail[]>([]);
   const [scanText, setScanText] = useState("");
-  const [scanDest, setScanDest] = useState<"COLLECTION" | "WISHLIST">("COLLECTION");
+  const [scanDest, setScanDest] = useState<"COLLECTION" | "WISHLIST" | "PRICE_CHECK">("COLLECTION");
   const [scanImageFile, setScanImageFile] = useState<File | null>(null);
   const [ocrBusy, setOcrBusy] = useState(false);
+  const [scanResult, setScanResult] = useState<ImageScanResponse | null>(null);
   const [planBusy, setPlanBusy] = useState(false);
   const [syncPageLimit, setSyncPageLimit] = useState(25);
   const [quickCardId, setQuickCardId] = useState("");
@@ -125,22 +166,25 @@ export function GemIndexApp() {
   }
 
   async function refresh(includeOutbox = false) {
-    const [d, c, s, y, co, wi, se] = await Promise.all([
+    const [d, c, s, y, co, wi, se, sw] = await Promise.all([
       api<DashboardData>("/api/dashboard"),
-      api<{ items: CardApi[] }>("/api/cards"),
-      api<{ items: SetMetrics[] }>("/api/sets"),
+      api<CardsResponse>("/api/cards"),
+      api<SetsResponse>("/api/sets"),
       api<SyncStatus>("/api/sync/status"),
       api<{ items: CollectionItem[] }>("/api/collection"),
       api<{ items: WishlistItem[] }>("/api/wishlist"),
       api<{ items: SealedItem[] }>("/api/sealed"),
+      api<{ items: SealedWishlistItem[] }>("/api/sealed-wishlist"),
     ]);
     setDashboard(d);
     setCards(c.items.slice(0, 60));
     setSets(s.items.slice(0, 30));
+    setDataQuality(d.dataQuality ?? c.dataQuality ?? s.dataQuality);
     setSync(y);
     setCollection(co.items);
     setWishlist(wi.items);
     setSealed(se.items);
+    setSealedWishlist(sw.items);
     if (!quickCardId && c.items.length) {
       setQuickCardId(c.items[0].cardId);
     }
@@ -387,11 +431,12 @@ export function GemIndexApp() {
       return;
     }
     try {
-      await api("/api/scanner", {
+      const out = await api<ImageScanResponse>("/api/scanner", {
         method: "POST",
         body: JSON.stringify({ scannedText: scanText, destination: scanDest, ownershipType: "RAW", quantity: 1 }),
       });
-      setMessage("Scanner import complete.");
+      setScanResult(out);
+      setMessage(scanDest === "PRICE_CHECK" ? "Price check complete." : "Scanner import complete.");
       setScanText("");
       await refresh(user?.role === "ADMIN");
     } catch (error) {
@@ -399,13 +444,13 @@ export function GemIndexApp() {
     }
   }
 
-  async function runOcrFromImage() {
-    if (!can("CARD_SCANNER_OCR")) {
-      setMessage("Upgrade to Elite for OCR scanner.");
+  async function runImageScan() {
+    if (!can("CARD_SCANNER_TEXT")) {
+      setMessage("Upgrade to Pro to use scanner.");
       return;
     }
     if (!scanImageFile) {
-      setMessage("Choose an image before OCR.");
+      setMessage("Choose an image before scanning.");
       return;
     }
 
@@ -413,23 +458,29 @@ export function GemIndexApp() {
       setOcrBusy(true);
       const formData = new FormData();
       formData.append("image", scanImageFile);
+      formData.append("destination", scanDest);
+      formData.append("quantity", "1");
 
-      const response = await fetch("/api/scanner/ocr", {
+      const response = await fetch("/api/scanner/image", {
         method: "POST",
         body: formData,
       });
 
-      const payload = (await response.json()) as { text?: string; confidence?: number; error?: string };
+      const payload = (await response.json()) as ImageScanResponse & { error?: string };
       if (!response.ok) {
-        throw new Error(payload.error ?? `OCR failed (${response.status})`);
+        throw new Error(payload.error ?? `Image scan failed (${response.status})`);
       }
 
-      setScanText(payload.text ?? "");
+      setScanResult(payload);
+      setScanText(payload.ocr?.text ?? "");
       setMessage(
-        `OCR complete (confidence ${(payload.confidence ?? 0).toFixed(1)}). Review text then click Scan.`,
+        payload.destination === "PRICE_CHECK"
+          ? `Price check complete (OCR ${(payload.ocr?.confidence ?? 0).toFixed(1)}).`
+          : `Image scan complete (OCR ${(payload.ocr?.confidence ?? 0).toFixed(1)}).`,
       );
+      await refresh(user?.role === "ADMIN");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "OCR failed");
+      setMessage(error instanceof Error ? error.message : "Image scan failed");
     } finally {
       setOcrBusy(false);
     }
@@ -532,6 +583,15 @@ export function GemIndexApp() {
     );
   }
 
+  const sourceStatus = dataQuality?.status ?? "SEEDED";
+  const investmentMetricsReady = dataQuality?.investmentMetricsReady ?? false;
+  const sourceBadgeClass =
+    sourceStatus === "LIVE_READY"
+      ? "bg-emerald-100 text-emerald-800"
+      : sourceStatus === "PARTIAL_LIVE"
+        ? "bg-amber-100 text-amber-800"
+        : "bg-slate-200 text-slate-700";
+
   return (
     <main className="mx-auto flex max-w-7xl flex-col gap-4 p-4 sm:p-8">
       <section className="rounded-2xl bg-[linear-gradient(130deg,#0f172a,#0f766e)] p-5 text-white">
@@ -544,6 +604,16 @@ export function GemIndexApp() {
             <p className="text-xs text-emerald-200" data-testid="plan-badge">
               Plan {sync?.subscription.tier ?? user.subscriptionTier} | {sync?.subscription.status ?? user.subscriptionStatus}
             </p>
+            <p className="mt-2 text-xs text-emerald-50">
+              <span className={`inline-flex rounded-full px-2 py-0.5 font-medium ${sourceBadgeClass}`} data-testid="data-source-badge">
+                Data Source: {dataQuality?.label ?? "Seeded"}
+              </span>
+            </p>
+            {!investmentMetricsReady ? (
+              <p className="mt-2 text-xs text-amber-100">
+                {dataQuality?.blockingReason ?? "Investment metrics are hidden until live data coverage improves."}
+              </p>
+            ) : null}
           </div>
           <button className="rounded border border-white/40 px-3 py-1.5 text-sm" onClick={logout}>Logout</button>
         </div>
@@ -635,32 +705,44 @@ export function GemIndexApp() {
       <section className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-2xl border border-slate-200 bg-white p-4">
           <h2 className="mb-2 font-semibold">Cards (Top 60)</h2>
+          {!investmentMetricsReady ? (
+            <p className="mb-2 text-xs text-amber-700">Investment metrics hidden until live coverage is sufficient.</p>
+          ) : null}
           <div className="max-h-96 overflow-auto text-sm">
             {cards.map((card) => (
-              <div key={card.cardId} className="grid grid-cols-[2fr_1fr_1fr_1fr] border-b py-1">
+              <div
+                key={card.cardId}
+                className={investmentMetricsReady ? "grid grid-cols-[2fr_1fr_1fr_1fr] border-b py-1" : "grid grid-cols-[2fr_1fr_1fr_1fr] border-b py-1 text-slate-500"}
+              >
                 <span>{card.cardName} {card.cardNumber} ({card.setCode.toUpperCase()})</span>
-                <span>{usd(card.rawPrice)}</span>
-                <span>{card.gemRateBlended.toFixed(2)}%</span>
-                <span>{card.liquidityScore.toFixed(0)}</span>
+                <span>{investmentMetricsReady ? usd(card.rawPrice) : "Pending"}</span>
+                <span>{investmentMetricsReady ? `${card.gemRateBlended.toFixed(2)}%` : "Pending"}</span>
+                <span>{investmentMetricsReady ? card.liquidityScore.toFixed(0) : "Pending"}</span>
               </div>
             ))}
           </div>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-4">
           <h2 className="mb-2 font-semibold">Set Values (Top 30)</h2>
+          {!investmentMetricsReady ? (
+            <p className="mb-2 text-xs text-amber-700">Set valuations are hidden until enough live pricing and population data is ingested.</p>
+          ) : null}
           <div className="max-h-96 overflow-auto text-sm">
             {sets.map((set) => (
-              <div key={set.setId} className="grid grid-cols-[2fr_1fr_1fr] border-b py-1">
+              <div
+                key={set.setId}
+                className={investmentMetricsReady ? "grid grid-cols-[2fr_1fr_1fr] border-b py-1" : "grid grid-cols-[2fr_1fr_1fr] border-b py-1 text-slate-500"}
+              >
                 <span>{set.name}</span>
-                <span>{usd(set.totalSetValue)}</span>
-                <span>{set.roi12m.toFixed(2)}%</span>
+                <span>{investmentMetricsReady ? usd(set.totalSetValue) : "Pending"}</span>
+                <span>{investmentMetricsReady ? `${set.roi12m.toFixed(2)}%` : "Pending"}</span>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-3">
+      <section className="grid gap-4 lg:grid-cols-4">
         <div className="rounded-2xl border border-slate-200 bg-white p-4">
           <h2 className="mb-2 font-semibold">Collection</h2>
           <div className="max-h-56 overflow-auto text-sm">
@@ -692,6 +774,16 @@ export function GemIndexApp() {
             ))}
           </div>
         </div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-4">
+          <h2 className="mb-2 font-semibold">Sealed Wishlist</h2>
+          <div className="max-h-56 overflow-auto text-sm">
+            {sealedWishlist.map((item) => (
+              <div key={item.id} className="border-b py-1">
+                {item.productName} ({item.setCode.toUpperCase()}) | P{item.priority} | {usd(item.targetPriceUsd)}
+              </div>
+            ))}
+          </div>
+        </div>
       </section>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-4">
@@ -699,15 +791,17 @@ export function GemIndexApp() {
         {!can("CARD_SCANNER_TEXT") ? (
           <p className="mb-2 text-sm text-slate-500">Upgrade to Pro to use card scanner.</p>
         ) : null}
-        <form className="flex flex-wrap gap-2" onSubmit={scanCard}>
-          <input className="min-w-72 flex-1 rounded border px-3 py-2" value={scanText} onChange={(e) => setScanText(e.target.value)} placeholder="Example: swsh7 215 Umbreon VMAX" required disabled={!can("CARD_SCANNER_TEXT")} />
-          <select className="rounded border px-2 py-2" value={scanDest} onChange={(e) => setScanDest(e.target.value as "COLLECTION" | "WISHLIST")} disabled={!can("CARD_SCANNER_TEXT")}>
+        <div className="mb-3 flex flex-wrap gap-2">
+          <select
+            className="rounded border px-2 py-2"
+            value={scanDest}
+            onChange={(e) => setScanDest(e.target.value as "COLLECTION" | "WISHLIST" | "PRICE_CHECK")}
+            disabled={!can("CARD_SCANNER_TEXT")}
+          >
             <option value="COLLECTION">Collection</option>
             <option value="WISHLIST">Wishlist</option>
+            <option value="PRICE_CHECK">Price Check</option>
           </select>
-          <button className="rounded bg-slate-900 px-3 py-2 text-white disabled:opacity-60" type="submit" disabled={!can("CARD_SCANNER_TEXT")}>Scan</button>
-        </form>
-        <div className="mt-3 flex flex-wrap gap-2">
           <input
             className="rounded border px-2 py-2 text-sm"
             type="file"
@@ -717,12 +811,46 @@ export function GemIndexApp() {
           <button
             className="rounded bg-emerald-700 px-3 py-2 text-sm text-white disabled:opacity-60"
             type="button"
-            onClick={runOcrFromImage}
-            disabled={ocrBusy || !can("CARD_SCANNER_OCR")}
+            onClick={runImageScan}
+            disabled={ocrBusy || !can("CARD_SCANNER_TEXT")}
           >
-            {!can("CARD_SCANNER_OCR") ? "OCR Requires Elite" : ocrBusy ? "Running OCR..." : "OCR From Image"}
+            {ocrBusy ? "Scanning..." : "Scan Photo"}
           </button>
         </div>
+        <form className="flex flex-wrap gap-2 border-t border-slate-200 pt-3" onSubmit={scanCard}>
+          <input
+            className="min-w-72 flex-1 rounded border px-3 py-2"
+            value={scanText}
+            onChange={(e) => setScanText(e.target.value)}
+            placeholder="Manual fallback: swsh7 215 Umbreon VMAX"
+            required
+            disabled={!can("CARD_SCANNER_TEXT")}
+          />
+          <button className="rounded bg-slate-900 px-3 py-2 text-white disabled:opacity-60" type="submit" disabled={!can("CARD_SCANNER_TEXT")}>
+            Scan Text
+          </button>
+        </form>
+        {scanResult ? (
+          <div className="mt-3 rounded border border-slate-200 bg-slate-50 p-3 text-sm">
+            <p className="font-medium">
+              Result: {scanResult.itemKind.replaceAll("_", " ")} | OCR confidence {(scanResult.ocr?.confidence ?? 0).toFixed(1)}
+            </p>
+            {scanResult.match?.card ? (
+              <p>
+                Card: {scanResult.match.card.name} {scanResult.match.card.cardNumber} ({scanResult.match.card.setCode?.toUpperCase()})
+              </p>
+            ) : null}
+            {scanResult.barcode?.value ? <p>Barcode: {scanResult.barcode.value} ({scanResult.barcode.format ?? "unknown"})</p> : null}
+            {scanResult.setMatch ? <p>Set: {scanResult.setMatch.name} ({scanResult.setMatch.code?.toUpperCase()})</p> : null}
+            {scanResult.priceCheck?.card ? (
+              <p>
+                Prices: RAW {usd(scanResult.priceCheck.card.raw)} | PSA10 {usd(scanResult.priceCheck.card.psa10)} | TAG10 {usd(scanResult.priceCheck.card.tag10)}
+              </p>
+            ) : null}
+            {scanResult.priceCheck?.set ? <p>Set Value: {usd(scanResult.priceCheck.set.totalSetValue)}</p> : null}
+            {scanResult.priceCheck?.sealedEstimateUsd ? <p>Sealed Estimate: {usd(scanResult.priceCheck.sealedEstimateUsd)}</p> : null}
+          </div>
+        ) : null}
       </section>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-4">

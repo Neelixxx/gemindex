@@ -139,6 +139,9 @@ function normalizeDb(raw: unknown): GemIndexDatabase {
     sealedInventoryItems: Array.isArray(incoming.sealedInventoryItems)
       ? incoming.sealedInventoryItems
       : seed.sealedInventoryItems,
+    sealedWishlistItems: Array.isArray(incoming.sealedWishlistItems)
+      ? incoming.sealedWishlistItems
+      : seed.sealedWishlistItems,
     scanEvents: Array.isArray(incoming.scanEvents) ? incoming.scanEvents : seed.scanEvents,
     sync: incoming.sync ?? {},
   };
@@ -187,6 +190,10 @@ function normalizeDb(raw: unknown): GemIndexDatabase {
     userId: validUserIds.has(item.userId) ? item.userId : fallbackUserId,
   }));
   result.sealedInventoryItems = result.sealedInventoryItems.map((item) => ({
+    ...item,
+    userId: validUserIds.has(item.userId) ? item.userId : fallbackUserId,
+  }));
+  result.sealedWishlistItems = result.sealedWishlistItems.map((item) => ({
     ...item,
     userId: validUserIds.has(item.userId) ? item.userId : fallbackUserId,
   }));

@@ -517,6 +517,7 @@ export function createSeedDatabase(): GemIndexDatabase {
         notes: "2 long-term hold, 1 potential flip",
       },
     ],
+    sealedWishlistItems: [],
     scanEvents: [],
     sync: {},
   };

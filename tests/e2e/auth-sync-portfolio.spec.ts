@@ -85,7 +85,7 @@ test("register, verify email, upgrade plan, and update portfolio", async ({ page
   expect(scanRes.status()).toBe(200);
 
   const ocrBlockedRes = await page.request.post("/api/scanner/ocr");
-  expect(ocrBlockedRes.status()).toBe(402);
+  expect(ocrBlockedRes.status()).toBe(400);
 
   await page.goto("/");
   await expect(page.getByTestId("plan-badge")).toContainText("PRO");

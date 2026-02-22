@@ -47,6 +47,26 @@ npm run dev
 
 Open `http://localhost:3000`.
 
+## Expo Go (Mobile Wrapper)
+
+The `mobile/` folder is an Expo app that opens Gem Index in a native WebView.
+
+1. Start Gem Index web app:
+```bash
+npm run dev
+```
+2. In another terminal, start Expo:
+```bash
+npm run mobile:start
+```
+3. Scan the Expo QR code with Expo Go.
+4. In the mobile app URL bar:
+   - Use your deployed URL, or
+   - Use your computer LAN URL (example: `http://192.168.1.25:3000`), not `localhost`.
+
+Optional env for Expo shell:
+- `EXPO_PUBLIC_GEMINDEX_URL` (default URL loaded on startup)
+
 ## Tests
 
 ```bash

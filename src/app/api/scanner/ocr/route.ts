@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { requireUser } from "@/lib/auth";
 import { featureErrorMessage, hasFeature } from "@/lib/entitlements";
+import { runImageOcr } from "@/lib/ocr";
 
 export const runtime = "nodejs";
 
@@ -12,9 +13,9 @@ export async function POST(request: NextRequest) {
   } catch {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  if (!hasFeature(user, "CARD_SCANNER_OCR")) {
+  if (!hasFeature(user, "CARD_SCANNER_TEXT")) {
     return NextResponse.json(
-      { error: featureErrorMessage(user, "CARD_SCANNER_OCR") },
+      { error: featureErrorMessage(user, "CARD_SCANNER_TEXT") },
       { status: 402 },
     );
   }
@@ -25,20 +26,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "image file is required" }, { status: 400 });
   }
 
-  const [{ recognize }] = await Promise.all([import("tesseract.js")]);
-
-  const bytes = await file.arrayBuffer();
-  const buffer = Buffer.from(bytes);
-
-  const result = await recognize(buffer, "eng", {
-    logger: () => undefined,
-  });
-
-  const rawText = result.data.text ?? "";
-  const cleanedText = rawText.replace(/\s+/g, " ").trim();
+  const result = await runImageOcr(file);
 
   return NextResponse.json({
-    text: cleanedText,
-    confidence: result.data.confidence ?? 0,
+    text: result.text,
+    confidence: result.confidence,
   });
 }

@@ -1,7 +1,7 @@
 export type Grader = "PSA" | "TAG";
 export type CardCondition = "RAW" | "PSA10" | "TAG10";
 export type OwnershipType = "RAW" | "GRADED";
-export type ScanDestination = "COLLECTION" | "WISHLIST";
+export type ScanDestination = "COLLECTION" | "WISHLIST" | "PRICE_CHECK";
 export type UserRole = "ADMIN" | "USER";
 export type SubscriptionTier = "FREE" | "PRO" | "ELITE";
 export type SubscriptionStatus = "TRIALING" | "ACTIVE" | "PAST_DUE" | "CANCELED";
@@ -197,6 +197,24 @@ export interface SealedInventoryRecord {
   notes?: string;
 }
 
+export interface SealedWishlistItemRecord {
+  id: string;
+  userId: string;
+  setId: string;
+  productName: string;
+  productType:
+    | "BOOSTER_BOX"
+    | "ELITE_TRAINER_BOX"
+    | "COLLECTION_BOX"
+    | "TIN"
+    | "BLISTER"
+    | "OTHER";
+  targetPriceUsd?: number;
+  priority: number;
+  createdAt: string;
+  notes?: string;
+}
+
 export interface ScanEventRecord {
   id: string;
   userId: string;
@@ -231,6 +249,7 @@ export interface GemIndexDatabase {
   collectionItems: CollectionItemRecord[];
   wishlistItems: WishlistItemRecord[];
   sealedInventoryItems: SealedInventoryRecord[];
+  sealedWishlistItems: SealedWishlistItemRecord[];
   scanEvents: ScanEventRecord[];
   sync: SyncState;
 }
@@ -283,6 +302,42 @@ export interface DashboardAlert {
   reason: string;
 }
 
+export type DataSourceStatus = "SEEDED" | "PARTIAL_LIVE" | "LIVE_READY";
+
+export interface SourceCount {
+  total: number;
+  seeded: number;
+  live: number;
+  livePct: number;
+}
+
+export interface DataQualitySnapshot {
+  status: DataSourceStatus;
+  label: string;
+  investmentMetricsReady: boolean;
+  blockingReason?: string;
+  counts: {
+    sets: SourceCount;
+    cards: SourceCount;
+    sales: SourceCount;
+    populationReports: SourceCount;
+    totalCards: number;
+    liveSalesCards: number;
+    livePopulationCards: number;
+    liveSalesCardCoveragePct: number;
+    livePopulationCardCoveragePct: number;
+  };
+  thresholds: {
+    minLiveSets: number;
+    minLiveCards: number;
+    minLiveSales: number;
+    minLiveSalesCardCoveragePct: number;
+    minLivePopulationReports: number;
+    minLivePopulationCardCoveragePct: number;
+  };
+  evaluatedAt: string;
+}
+
 export interface DashboardData {
   generatedAt: string;
   totalTrackedCards: number;
@@ -291,6 +346,7 @@ export interface DashboardData {
   topUndervalued: DashboardAlert[];
   flipperSignals: DashboardAlert[];
   topArbitrage: DashboardAlert[];
+  dataQuality: DataQualitySnapshot;
   sync?: SyncState;
 }
 

@@ -11,6 +11,7 @@ import type {
   SaleRecord,
   SetMetrics,
 } from "./types";
+import { assessDataQuality } from "./data-quality";
 
 const RARITY_SCORES: Record<string, number> = {
   "Secret Rare": 95,
@@ -335,7 +336,21 @@ function alertLabel(db: GemIndexDatabase, cardId: string): string {
 }
 
 export function dashboard(db: GemIndexDatabase): DashboardData {
+  const dataQuality = assessDataQuality(db);
   const metrics = cardMetrics(db);
+
+  if (!dataQuality.investmentMetricsReady) {
+    return {
+      generatedAt: new Date().toISOString(),
+      totalTrackedCards: metrics.length,
+      totalSets: db.sets.length,
+      cardIndex: [],
+      topUndervalued: [],
+      flipperSignals: [],
+      topArbitrage: [],
+      dataQuality,
+    };
+  }
 
   const undervalued: DashboardAlert[] = metrics
     .map((metric) => {
@@ -407,5 +422,6 @@ export function dashboard(db: GemIndexDatabase): DashboardData {
     topUndervalued: undervalued,
     flipperSignals,
     topArbitrage,
+    dataQuality,
   };
 }
