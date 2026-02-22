@@ -1,0 +1,13 @@
+.git
+.github
+.next
+coverage
+data
+docs
+node_modules
+npm-debug.log*
+playwright-report
+test-results
+tests
+.env
+.env.local
