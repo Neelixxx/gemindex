@@ -16,6 +16,13 @@ const loginSchema = z.object({
 });
 
 function requireEmailVerification(): boolean {
+  const allowUnverified =
+    process.env.AUTH_ALLOW_UNVERIFIED_LOGIN === "1" ||
+    process.env.AUTH_ALLOW_UNVERIFIED_LOGIN === "true";
+  if (allowUnverified) {
+    return false;
+  }
+
   if (process.env.NODE_ENV === "production") {
     return true;
   }

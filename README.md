@@ -86,7 +86,8 @@ See `.env.example`.
 Key ones:
 
 - `SESSION_SECRET`
-- `AUTH_REQUIRE_EMAIL_VERIFICATION` (optional override; production still enforces verification)
+- `AUTH_REQUIRE_EMAIL_VERIFICATION` (optional dev strictness override)
+- `AUTH_ALLOW_UNVERIFIED_LOGIN` (temporary staging/prod bypass; set `1` only while testing)
 - `DATABASE_URL` (optional; if unset, file storage is used)
 - `REDIS_URL` (optional; enables queue worker mode)
 - `POKEMONTCG_API_KEY`
