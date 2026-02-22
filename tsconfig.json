@@ -30,5 +30,13 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules", "mobile", "mobile/**"]
+  "exclude": [
+    "node_modules",
+    "mobile",
+    "mobile/**",
+    "tests",
+    "tests/**",
+    "vitest.config.mjs",
+    "playwright.config.ts"
+  ]
 }
