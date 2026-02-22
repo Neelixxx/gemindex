@@ -246,7 +246,7 @@ export function GemIndexApp() {
         body: JSON.stringify(body),
       });
 
-      if (out.requiresEmailVerification || !out.user.emailVerified) {
+      if (authMode === "register" && (out.requiresEmailVerification || !out.user.emailVerified)) {
         setUser(null);
         if (out.debugVerificationToken) {
           setVerifyToken(out.debugVerificationToken);

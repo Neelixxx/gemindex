@@ -86,6 +86,7 @@ See `.env.example`.
 Key ones:
 
 - `SESSION_SECRET`
+- `AUTH_REQUIRE_EMAIL_VERIFICATION` (optional override; production still enforces verification)
 - `DATABASE_URL` (optional; if unset, file storage is used)
 - `REDIS_URL` (optional; enables queue worker mode)
 - `POKEMONTCG_API_KEY`

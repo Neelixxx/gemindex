@@ -15,6 +15,15 @@ const loginSchema = z.object({
   otp: z.string().length(6).optional(),
 });
 
+function requireEmailVerification(): boolean {
+  if (process.env.NODE_ENV === "production") {
+    return true;
+  }
+
+  const override = process.env.AUTH_REQUIRE_EMAIL_VERIFICATION;
+  return override === "1" || override === "true";
+}
+
 export async function POST(request: NextRequest) {
   const json = await request.json();
   const parse = loginSchema.safeParse(json);
@@ -51,10 +60,12 @@ export async function POST(request: NextRequest) {
 
   if (!user.emailVerified) {
     await issueEmailVerification(user);
-    return NextResponse.json(
-      { error: "Email not verified. A new verification email has been sent." },
-      { status: 403 },
-    );
+    if (requireEmailVerification()) {
+      return NextResponse.json(
+        { error: "Email not verified. A new verification email has been sent." },
+        { status: 403 },
+      );
+    }
   }
 
   if (user.role === "ADMIN" && user.totpEnabled && user.totpSecret) {
