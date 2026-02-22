@@ -1,0 +1,16 @@
+name: cron-worker
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/5 * * * *"
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Worker Tick Endpoint
+        run: >
+          curl --fail --silent --show-error
+          -X POST
+          "${{ secrets.APP_URL }}/api/jobs/worker?token=${{ secrets.CRON_SECRET }}"

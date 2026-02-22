@@ -1,0 +1,38 @@
+name: deploy-render
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-test-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm run test
+
+      - name: Build
+        run: npm run build
+
+      - name: Trigger Render Web Deploy
+        if: ${{ secrets.RENDER_WEB_DEPLOY_HOOK != '' }}
+        run: curl --fail -X POST "${{ secrets.RENDER_WEB_DEPLOY_HOOK }}"
+
+      - name: Trigger Render Worker Deploy
+        if: ${{ secrets.RENDER_WORKER_DEPLOY_HOOK != '' }}
+        run: curl --fail -X POST "${{ secrets.RENDER_WORKER_DEPLOY_HOOK }}"
