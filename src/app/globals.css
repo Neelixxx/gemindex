@@ -12,6 +12,14 @@
   --font-serif: var(--font-source-serif);
 }
 
+@font-face {
+  font-family: "Chailce Noggin";
+  src: url("/fonts/ChailceNogginRegular-2OXoW.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -35,4 +43,8 @@ h1,
 h2,
 h3 {
   font-family: var(--font-source-serif), serif;
+}
+
+.gem-title {
+  font-family: "Chailce Noggin", var(--font-source-serif), serif;
 }

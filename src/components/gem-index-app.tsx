@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { FormEvent, useEffect, useState } from "react";
 
 import type { DashboardData, DataQualitySnapshot, PublicUser, SetMetrics, SyncState } from "@/lib/types";
@@ -107,6 +108,28 @@ type OutboxEmail = {
 };
 
 type ApiError = Error & { status?: number };
+type HomeTab =
+  | "CARD_DETAILS"
+  | "SET_VALUES"
+  | "CARDS_TOP_60"
+  | "PERSONAL_COLLECTION"
+  | "PERSONAL_COLLECTION_WISHLIST"
+  | "SEALED_INVENTORY"
+  | "SEALED_WISHLIST"
+  | "QUICK_PORTFOLIO_ACTIONS"
+  | "SETTINGS";
+
+const HOME_TABS: Array<{ id: HomeTab; label: string }> = [
+  { id: "CARD_DETAILS", label: "Card Details" },
+  { id: "SET_VALUES", label: "Set Values" },
+  { id: "CARDS_TOP_60", label: "Cards (Top 60)" },
+  { id: "PERSONAL_COLLECTION", label: "Personal Collection" },
+  { id: "PERSONAL_COLLECTION_WISHLIST", label: "Personal Collection Wishlist" },
+  { id: "SEALED_INVENTORY", label: "Sealed Inventory" },
+  { id: "SEALED_WISHLIST", label: "Sealed Wishlist" },
+  { id: "QUICK_PORTFOLIO_ACTIONS", label: "Quick Portfolio Actions" },
+  { id: "SETTINGS", label: "Settings" },
+];
 
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, {
@@ -157,6 +180,8 @@ export function GemIndexApp() {
   const [syncPageLimit, setSyncPageLimit] = useState(25);
   const [quickCardId, setQuickCardId] = useState("");
   const [quickSetId, setQuickSetId] = useState("");
+  const [activeTab, setActiveTab] = useState<HomeTab>("CARD_DETAILS");
+  const [cardSearch, setCardSearch] = useState("");
 
   function can(feature: keyof SyncStatus["features"]): boolean {
     if (user?.role === "ADMIN" && !sync?.features) {
@@ -532,7 +557,7 @@ export function GemIndexApp() {
   if (!user) {
     return (
       <main className="mx-auto max-w-xl p-8">
-        <h1 className="text-3xl font-semibold">Gem Index</h1>
+        <h1 className="gem-title text-3xl font-semibold">Gem Index</h1>
         <p className="mt-2 text-sm text-slate-600">Live Pokemon TCG analytics + portfolio tracking.</p>
         <form className="mt-6 space-y-3 rounded-2xl border border-slate-200 bg-white p-4" onSubmit={submitAuth}>
           {authMode === "register" ? (
@@ -591,288 +616,525 @@ export function GemIndexApp() {
       : sourceStatus === "PARTIAL_LIVE"
         ? "bg-amber-100 text-amber-800"
         : "bg-slate-200 text-slate-700";
+  const query = cardSearch.trim().toLowerCase();
+  const matchingCards = query
+    ? cards
+        .filter((card) =>
+          `${card.cardName} ${card.cardNumber} ${card.setCode}`.toLowerCase().includes(query),
+        )
+        .slice(0, 30)
+    : cards.slice(0, 30);
+  const selectedCard =
+    cards.find((card) => card.cardId === quickCardId) ?? matchingCards[0] ?? cards[0] ?? null;
+  const setRows = query
+    ? sets
+        .filter((set) => `${set.name} ${set.code}`.toLowerCase().includes(query))
+        .slice(0, 60)
+    : sets.slice(0, 60);
+  const cardsTopRows = query
+    ? cards
+        .filter((card) =>
+          `${card.cardName} ${card.cardNumber} ${card.setCode}`.toLowerCase().includes(query),
+        )
+        .slice(0, 60)
+    : cards.slice(0, 60);
 
-  return (
-    <main className="mx-auto flex max-w-7xl flex-col gap-4 p-4 sm:p-8">
-      <section className="rounded-2xl bg-[linear-gradient(130deg,#0f172a,#0f766e)] p-5 text-white">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold">Gem Index</h1>
-            <p className="text-sm text-emerald-100">
-              {user.name} ({user.role}) | email {user.emailVerified ? "verified" : "unverified"}
-            </p>
-            <p className="text-xs text-emerald-200" data-testid="plan-badge">
-              Plan {sync?.subscription.tier ?? user.subscriptionTier} | {sync?.subscription.status ?? user.subscriptionStatus}
-            </p>
-            <p className="mt-2 text-xs text-emerald-50">
-              <span className={`inline-flex rounded-full px-2 py-0.5 font-medium ${sourceBadgeClass}`} data-testid="data-source-badge">
-                Data Source: {dataQuality?.label ?? "Seeded"}
-              </span>
-            </p>
-            {!investmentMetricsReady ? (
-              <p className="mt-2 text-xs text-amber-100">
-                {dataQuality?.blockingReason ?? "Investment metrics are hidden until live data coverage improves."}
-              </p>
-            ) : null}
-          </div>
-          <button className="rounded border border-white/40 px-3 py-1.5 text-sm" onClick={logout}>Logout</button>
-        </div>
-        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <div className="rounded bg-white/10 p-2 text-sm">Cards: {dashboard?.totalTrackedCards ?? 0}</div>
-          <div className="rounded bg-white/10 p-2 text-sm">Sets: {dashboard?.totalSets ?? 0}</div>
-          <div className="rounded bg-white/10 p-2 text-sm">Sales: {sync?.totals.sales.toLocaleString() ?? 0}</div>
-          <div className="rounded bg-white/10 p-2 text-sm">Last Sync: {sync?.sync.lastSalesSyncAt ? new Date(sync.sync.lastSalesSyncAt).toLocaleDateString() : "never"}</div>
-        </div>
-      </section>
-
-      <section className="rounded-2xl border border-slate-200 bg-white p-4">
-        <h2 className="font-semibold">Billing and Entitlements</h2>
-        <p className="mt-1 text-sm text-slate-600">
-          Current plan {sync?.subscription.tier ?? user.subscriptionTier} ({sync?.subscription.status ?? user.subscriptionStatus})
-          {sync?.subscription.currentPeriodEnd ? ` | Renews ${new Date(sync.subscription.currentPeriodEnd).toLocaleDateString()}` : ""}
-          {sync?.subscription.trialEndsAt ? ` | Trial ends ${new Date(sync.subscription.trialEndsAt).toLocaleDateString()}` : ""}
-        </p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <button
-            className="rounded border border-slate-300 px-3 py-1 text-sm"
-            onClick={() => changePlan("FREE")}
-            disabled={planBusy}
-          >
-            Free
-          </button>
-          <button
-            className="rounded border border-cyan-300 bg-cyan-50 px-3 py-1 text-sm"
-            onClick={() => changePlan("PRO")}
-            disabled={planBusy}
-          >
-            Pro
-          </button>
-          <button
-            className="rounded border border-indigo-300 bg-indigo-50 px-3 py-1 text-sm"
-            onClick={() => changePlan("ELITE")}
-            disabled={planBusy}
-          >
-            Elite
-          </button>
-          <button
-            className="rounded border border-emerald-300 bg-emerald-50 px-3 py-1 text-sm"
-            onClick={openBillingPortal}
-          >
-            Billing Portal
-          </button>
-        </div>
-      </section>
-
-      <section className="rounded-2xl border border-slate-200 bg-white p-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <h2 className="font-semibold">Background Sync + Queue</h2>
-          <input className="w-24 rounded border px-2 py-1 text-sm" type="number" value={syncPageLimit} onChange={(e) => setSyncPageLimit(Number(e.target.value))} />
-          {user.role === "ADMIN" && can("LIVE_SYNC_QUEUE") ? (
+  const renderActiveTab = () => {
+    if (activeTab === "CARD_DETAILS") {
+      return (
+        <div className="space-y-4">
+          <h2 className="text-xl font-semibold text-slate-900">Card Investment Details</h2>
+          {selectedCard ? (
             <>
-              <button className="rounded bg-emerald-700 px-3 py-1 text-sm text-white" onClick={() => runSync("catalog")} data-testid="queue-catalog">Queue Catalog</button>
-              <button className="rounded bg-cyan-700 px-3 py-1 text-sm text-white" onClick={() => runSync("sales")} data-testid="queue-sales">Queue Sales</button>
-              {can("DIRECT_TCGPLAYER_SYNC") ? <button className="rounded bg-indigo-700 px-3 py-1 text-sm text-white" onClick={queueDirectTcgplayerSync}>Queue TCGplayer Direct</button> : null}
-              <button className="rounded bg-slate-900 px-3 py-1 text-sm text-white" onClick={runWorkerNow} data-testid="run-worker-tick">Run Worker Tick</button>
-            </>
-          ) : <p className="text-xs text-slate-500">Upgrade to Pro to run live sync jobs.</p>}
-        </div>
-        <p className="mt-2 text-sm text-slate-600">
-          Jobs: {sync?.jobs.configured ?? 0} configured | {sync?.jobs.queued ?? 0} queued | {sync?.jobs.running ?? 0} running
-        </p>
-        {message ? <p className="mt-2 text-sm text-slate-700">{message}</p> : null}
-      </section>
-
-      {user.role === "ADMIN" ? (
-        <section className="rounded-2xl border border-slate-200 bg-white p-4">
-          <h2 className="mb-2 font-semibold">Email Outbox (Dev)</h2>
-          <div className="max-h-56 overflow-auto text-xs">
-            {outbox.length === 0 ? (
-              <p className="text-slate-500">No recent messages.</p>
-            ) : (
-              outbox.map((mail) => (
-                <div key={mail.id} className="border-b py-2">
-                  <p>
-                    {mail.template} to {mail.to} at {new Date(mail.createdAt).toLocaleString()}
+              {!investmentMetricsReady ? (
+                <p className="rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-700">
+                  {dataQuality?.blockingReason ??
+                    "Investment metrics are still warming up with live data."}
+                </p>
+              ) : null}
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="rounded-lg border border-slate-200 p-3">
+                  <p className="text-xs text-slate-500">Card</p>
+                  <p className="text-sm font-semibold text-slate-900">
+                    {selectedCard.cardName} {selectedCard.cardNumber}
                   </p>
-                  <p className="whitespace-pre-wrap text-slate-600">{mail.body}</p>
                 </div>
-              ))
-            )}
-          </div>
-        </section>
-      ) : null}
-
-      <section className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-2xl border border-slate-200 bg-white p-4">
-          <h2 className="mb-2 font-semibold">Cards (Top 60)</h2>
-          {!investmentMetricsReady ? (
-            <p className="mb-2 text-xs text-amber-700">Investment metrics hidden until live coverage is sufficient.</p>
-          ) : null}
-          <div className="max-h-96 overflow-auto text-sm">
-            {cards.map((card) => (
-              <div
-                key={card.cardId}
-                className={investmentMetricsReady ? "grid grid-cols-[2fr_1fr_1fr_1fr] border-b py-1" : "grid grid-cols-[2fr_1fr_1fr_1fr] border-b py-1 text-slate-500"}
-              >
-                <span>{card.cardName} {card.cardNumber} ({card.setCode.toUpperCase()})</span>
-                <span>{investmentMetricsReady ? usd(card.rawPrice) : "Pending"}</span>
-                <span>{investmentMetricsReady ? `${card.gemRateBlended.toFixed(2)}%` : "Pending"}</span>
-                <span>{investmentMetricsReady ? card.liquidityScore.toFixed(0) : "Pending"}</span>
+                <div className="rounded-lg border border-slate-200 p-3">
+                  <p className="text-xs text-slate-500">Set</p>
+                  <p className="text-sm font-semibold text-slate-900">{selectedCard.setCode.toUpperCase()}</p>
+                </div>
+                <div className="rounded-lg border border-slate-200 p-3">
+                  <p className="text-xs text-slate-500">Raw Market Price</p>
+                  <p className="text-sm font-semibold text-slate-900">
+                    {investmentMetricsReady ? usd(selectedCard.rawPrice) : "Pending"}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-slate-200 p-3">
+                  <p className="text-xs text-slate-500">Gem Rate / Liquidity</p>
+                  <p className="text-sm font-semibold text-slate-900">
+                    {investmentMetricsReady
+                      ? `${selectedCard.gemRateBlended.toFixed(2)}% / ${selectedCard.liquidityScore.toFixed(0)}`
+                      : "Pending"}
+                  </p>
+                </div>
               </div>
-            ))}
+            </>
+          ) : (
+            <p className="text-sm text-slate-500">No matching card found.</p>
+          )}
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold text-slate-700">Matching Cards</h3>
+            <div className="max-h-80 overflow-auto rounded-lg border border-slate-200">
+              {matchingCards.length === 0 ? (
+                <p className="p-3 text-sm text-slate-500">No cards match your search.</p>
+              ) : (
+                matchingCards.map((card) => (
+                  <button
+                    key={card.cardId}
+                    onClick={() => setQuickCardId(card.cardId)}
+                    className={`grid w-full grid-cols-[2fr_1fr_1fr] gap-2 border-b px-3 py-2 text-left text-sm hover:bg-slate-50 ${
+                      selectedCard?.cardId === card.cardId ? "bg-cyan-50" : ""
+                    }`}
+                  >
+                    <span>
+                      {card.cardName} {card.cardNumber}
+                    </span>
+                    <span>{card.setCode.toUpperCase()}</span>
+                    <span>{investmentMetricsReady ? usd(card.rawPrice) : "Pending"}</span>
+                  </button>
+                ))
+              )}
+            </div>
           </div>
         </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-4">
-          <h2 className="mb-2 font-semibold">Set Values (Top 30)</h2>
+      );
+    }
+
+    if (activeTab === "SET_VALUES") {
+      return (
+        <div className="space-y-3">
+          <h2 className="text-xl font-semibold text-slate-900">Set Values</h2>
+          <p className="text-xs text-slate-500">
+            {query
+              ? `Filtered by "${cardSearch}".`
+              : "Review current set values and ROI trends."}
+          </p>
           {!investmentMetricsReady ? (
-            <p className="mb-2 text-xs text-amber-700">Set valuations are hidden until enough live pricing and population data is ingested.</p>
+            <p className="rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-700">
+              {dataQuality?.blockingReason ??
+                "Set valuations are hidden until enough live pricing and population coverage is ingested."}
+            </p>
           ) : null}
-          <div className="max-h-96 overflow-auto text-sm">
-            {sets.map((set) => (
-              <div
-                key={set.setId}
-                className={investmentMetricsReady ? "grid grid-cols-[2fr_1fr_1fr] border-b py-1" : "grid grid-cols-[2fr_1fr_1fr] border-b py-1 text-slate-500"}
-              >
+          <div className="max-h-[30rem] overflow-auto rounded-lg border border-slate-200 text-sm">
+            {setRows.map((set) => (
+              <div key={set.setId} className="grid grid-cols-[2fr_1fr_1fr] border-b px-3 py-2">
                 <span>{set.name}</span>
                 <span>{investmentMetricsReady ? usd(set.totalSetValue) : "Pending"}</span>
                 <span>{investmentMetricsReady ? `${set.roi12m.toFixed(2)}%` : "Pending"}</span>
               </div>
             ))}
+            {setRows.length === 0 ? (
+              <p className="p-3 text-slate-500">No sets match your current search.</p>
+            ) : null}
           </div>
         </div>
-      </section>
+      );
+    }
 
-      <section className="grid gap-4 lg:grid-cols-4">
-        <div className="rounded-2xl border border-slate-200 bg-white p-4">
-          <h2 className="mb-2 font-semibold">Collection</h2>
-          <div className="max-h-56 overflow-auto text-sm">
-            {collection.map((item) => (
-              <div key={item.id} className="border-b py-1">
-                {item.card?.name} {item.card?.cardNumber} ({item.card?.setCode.toUpperCase()}) x{item.quantity}
-                {item.grader ? ` ${item.grader}${item.grade ? ` ${item.grade}` : ""}` : ""}
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-4">
-          <h2 className="mb-2 font-semibold">Wishlist</h2>
-          <div className="max-h-56 overflow-auto text-sm">
-            {wishlist.map((item) => (
-              <div key={item.id} className="border-b py-1">
-                {item.card?.name} {item.card?.cardNumber} ({item.card?.setCode.toUpperCase()}) | P{item.priority} | {usd(item.targetPriceUsd)}
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-4">
-          <h2 className="mb-2 font-semibold">Sealed</h2>
-          <div className="max-h-56 overflow-auto text-sm">
-            {sealed.map((item) => (
-              <div key={item.id} className="border-b py-1">
-                {item.productName} ({item.setCode.toUpperCase()}) x{item.quantity} | {usd(item.estimatedValueUsd)}
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-4">
-          <h2 className="mb-2 font-semibold">Sealed Wishlist</h2>
-          <div className="max-h-56 overflow-auto text-sm">
-            {sealedWishlist.map((item) => (
-              <div key={item.id} className="border-b py-1">
-                {item.productName} ({item.setCode.toUpperCase()}) | P{item.priority} | {usd(item.targetPriceUsd)}
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="rounded-2xl border border-slate-200 bg-white p-4">
-        <h2 className="mb-2 font-semibold">Scanner</h2>
-        {!can("CARD_SCANNER_TEXT") ? (
-          <p className="mb-2 text-sm text-slate-500">Upgrade to Pro to use card scanner.</p>
-        ) : null}
-        <div className="mb-3 flex flex-wrap gap-2">
-          <select
-            className="rounded border px-2 py-2"
-            value={scanDest}
-            onChange={(e) => setScanDest(e.target.value as "COLLECTION" | "WISHLIST" | "PRICE_CHECK")}
-            disabled={!can("CARD_SCANNER_TEXT")}
-          >
-            <option value="COLLECTION">Collection</option>
-            <option value="WISHLIST">Wishlist</option>
-            <option value="PRICE_CHECK">Price Check</option>
-          </select>
-          <input
-            className="rounded border px-2 py-2 text-sm"
-            type="file"
-            accept="image/*"
-            onChange={(event) => setScanImageFile(event.target.files?.[0] ?? null)}
-          />
-          <button
-            className="rounded bg-emerald-700 px-3 py-2 text-sm text-white disabled:opacity-60"
-            type="button"
-            onClick={runImageScan}
-            disabled={ocrBusy || !can("CARD_SCANNER_TEXT")}
-          >
-            {ocrBusy ? "Scanning..." : "Scan Photo"}
-          </button>
-        </div>
-        <form className="flex flex-wrap gap-2 border-t border-slate-200 pt-3" onSubmit={scanCard}>
-          <input
-            className="min-w-72 flex-1 rounded border px-3 py-2"
-            value={scanText}
-            onChange={(e) => setScanText(e.target.value)}
-            placeholder="Manual fallback: swsh7 215 Umbreon VMAX"
-            required
-            disabled={!can("CARD_SCANNER_TEXT")}
-          />
-          <button className="rounded bg-slate-900 px-3 py-2 text-white disabled:opacity-60" type="submit" disabled={!can("CARD_SCANNER_TEXT")}>
-            Scan Text
-          </button>
-        </form>
-        {scanResult ? (
-          <div className="mt-3 rounded border border-slate-200 bg-slate-50 p-3 text-sm">
-            <p className="font-medium">
-              Result: {scanResult.itemKind.replaceAll("_", " ")} | OCR confidence {(scanResult.ocr?.confidence ?? 0).toFixed(1)}
+    if (activeTab === "CARDS_TOP_60") {
+      return (
+        <div className="space-y-3">
+          <h2 className="text-xl font-semibold text-slate-900">Cards (Top 60)</h2>
+          {!investmentMetricsReady ? (
+            <p className="rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-700">
+              Investment metrics hidden until live coverage is sufficient.
             </p>
-            {scanResult.match?.card ? (
-              <p>
-                Card: {scanResult.match.card.name} {scanResult.match.card.cardNumber} ({scanResult.match.card.setCode?.toUpperCase()})
-              </p>
-            ) : null}
-            {scanResult.barcode?.value ? <p>Barcode: {scanResult.barcode.value} ({scanResult.barcode.format ?? "unknown"})</p> : null}
-            {scanResult.setMatch ? <p>Set: {scanResult.setMatch.name} ({scanResult.setMatch.code?.toUpperCase()})</p> : null}
-            {scanResult.priceCheck?.card ? (
-              <p>
-                Prices: RAW {usd(scanResult.priceCheck.card.raw)} | PSA10 {usd(scanResult.priceCheck.card.psa10)} | TAG10 {usd(scanResult.priceCheck.card.tag10)}
-              </p>
-            ) : null}
-            {scanResult.priceCheck?.set ? <p>Set Value: {usd(scanResult.priceCheck.set.totalSetValue)}</p> : null}
-            {scanResult.priceCheck?.sealedEstimateUsd ? <p>Sealed Estimate: {usd(scanResult.priceCheck.sealedEstimateUsd)}</p> : null}
+          ) : null}
+          <div className="max-h-[30rem] overflow-auto rounded-lg border border-slate-200 text-sm">
+            {cardsTopRows.map((card) => (
+              <div key={card.cardId} className="grid grid-cols-[2fr_1fr_1fr_1fr] border-b px-3 py-2">
+                <span>
+                  {card.cardName} {card.cardNumber}
+                </span>
+                <span>{card.setCode.toUpperCase()}</span>
+                <span>{investmentMetricsReady ? usd(card.rawPrice) : "Pending"}</span>
+                <span>{investmentMetricsReady ? `${card.gemRateBlended.toFixed(2)}%` : "Pending"}</span>
+              </div>
+            ))}
           </div>
+        </div>
+      );
+    }
+
+    if (activeTab === "PERSONAL_COLLECTION") {
+      return (
+        <div className="space-y-3">
+          <h2 className="text-xl font-semibold text-slate-900">Personal Collection</h2>
+          {!can("PORTFOLIO_TRACKING") ? (
+            <p className="text-sm text-slate-500">Upgrade to Pro to track personal collection.</p>
+          ) : (
+            <div className="max-h-[30rem] overflow-auto rounded-lg border border-slate-200 text-sm">
+              {collection.map((item) => (
+                <div key={item.id} className="grid grid-cols-[2fr_1fr_1fr] border-b px-3 py-2">
+                  <span>
+                    {item.card?.name} {item.card?.cardNumber} ({item.card?.setCode.toUpperCase()})
+                  </span>
+                  <span>{item.ownershipType}</span>
+                  <span>x{item.quantity}</span>
+                </div>
+              ))}
+              {collection.length === 0 ? (
+                <p className="p-3 text-slate-500">No collection items yet.</p>
+              ) : null}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    if (activeTab === "PERSONAL_COLLECTION_WISHLIST") {
+      return (
+        <div className="space-y-3">
+          <h2 className="text-xl font-semibold text-slate-900">Personal Collection Wishlist</h2>
+          {!can("PORTFOLIO_TRACKING") ? (
+            <p className="text-sm text-slate-500">Upgrade to Pro to track wishlist items.</p>
+          ) : (
+            <div className="max-h-[30rem] overflow-auto rounded-lg border border-slate-200 text-sm">
+              {wishlist.map((item) => (
+                <div key={item.id} className="grid grid-cols-[2fr_1fr_1fr] border-b px-3 py-2">
+                  <span>
+                    {item.card?.name} {item.card?.cardNumber} ({item.card?.setCode.toUpperCase()})
+                  </span>
+                  <span>P{item.priority}</span>
+                  <span>{usd(item.targetPriceUsd)}</span>
+                </div>
+              ))}
+              {wishlist.length === 0 ? (
+                <p className="p-3 text-slate-500">No wishlist items yet.</p>
+              ) : null}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    if (activeTab === "SEALED_INVENTORY") {
+      return (
+        <div className="space-y-3">
+          <h2 className="text-xl font-semibold text-slate-900">Sealed Inventory</h2>
+          {!can("PORTFOLIO_TRACKING") ? (
+            <p className="text-sm text-slate-500">Upgrade to Pro to track sealed inventory.</p>
+          ) : (
+            <div className="max-h-[30rem] overflow-auto rounded-lg border border-slate-200 text-sm">
+              {sealed.map((item) => (
+                <div key={item.id} className="grid grid-cols-[2fr_1fr_1fr] border-b px-3 py-2">
+                  <span>
+                    {item.productName} ({item.setCode.toUpperCase()})
+                  </span>
+                  <span>x{item.quantity}</span>
+                  <span>{usd(item.estimatedValueUsd)}</span>
+                </div>
+              ))}
+              {sealed.length === 0 ? (
+                <p className="p-3 text-slate-500">No sealed inventory yet.</p>
+              ) : null}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    if (activeTab === "SEALED_WISHLIST") {
+      return (
+        <div className="space-y-3">
+          <h2 className="text-xl font-semibold text-slate-900">Sealed Wishlist</h2>
+          {!can("PORTFOLIO_TRACKING") ? (
+            <p className="text-sm text-slate-500">Upgrade to Pro to track sealed wishlist.</p>
+          ) : (
+            <div className="max-h-[30rem] overflow-auto rounded-lg border border-slate-200 text-sm">
+              {sealedWishlist.map((item) => (
+                <div key={item.id} className="grid grid-cols-[2fr_1fr_1fr] border-b px-3 py-2">
+                  <span>
+                    {item.productName} ({item.setCode.toUpperCase()})
+                  </span>
+                  <span>P{item.priority}</span>
+                  <span>{usd(item.targetPriceUsd)}</span>
+                </div>
+              ))}
+              {sealedWishlist.length === 0 ? (
+                <p className="p-3 text-slate-500">No sealed wishlist items yet.</p>
+              ) : null}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    if (activeTab === "QUICK_PORTFOLIO_ACTIONS") {
+      return (
+        <div className="space-y-3">
+          <h2 className="text-xl font-semibold text-slate-900">Quick Portfolio Actions</h2>
+          {!can("PORTFOLIO_TRACKING") ? (
+            <p className="text-sm text-slate-500">
+              Upgrade to Pro to track collection, wishlist, and sealed positions.
+            </p>
+          ) : null}
+          <div className="grid gap-2 md:grid-cols-[2fr_2fr_auto_auto_auto]">
+            <select
+              className="rounded border px-2 py-2 text-sm"
+              value={quickCardId}
+              onChange={(e) => setQuickCardId(e.target.value)}
+              disabled={!can("PORTFOLIO_TRACKING")}
+            >
+              {cards.map((card) => (
+                <option key={card.cardId} value={card.cardId}>
+                  {card.cardName} {card.cardNumber}
+                </option>
+              ))}
+            </select>
+            <select
+              className="rounded border px-2 py-2 text-sm"
+              value={quickSetId}
+              onChange={(e) => setQuickSetId(e.target.value)}
+              disabled={!can("PORTFOLIO_TRACKING")}
+            >
+              {sets.map((set) => (
+                <option key={set.setId} value={set.setId}>
+                  {set.name}
+                </option>
+              ))}
+            </select>
+            <button
+              className="rounded bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-60"
+              onClick={quickAddCollection}
+              disabled={!can("PORTFOLIO_TRACKING")}
+              data-testid="quick-add-raw"
+            >
+              Add Raw
+            </button>
+            <button
+              className="rounded bg-amber-600 px-3 py-2 text-sm text-white disabled:opacity-60"
+              onClick={quickAddWishlist}
+              disabled={!can("PORTFOLIO_TRACKING")}
+              data-testid="quick-add-wish"
+            >
+              Add Wish
+            </button>
+            <button
+              className="rounded bg-cyan-700 px-3 py-2 text-sm text-white disabled:opacity-60"
+              onClick={quickAddSealed}
+              disabled={!can("PORTFOLIO_TRACKING")}
+              data-testid="quick-add-sealed"
+            >
+              Add Sealed
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-4">
+        <h2 className="text-xl font-semibold text-slate-900">Settings</h2>
+        <div className="rounded-xl border border-slate-200 p-3 text-sm text-slate-700">
+          Cards: {dashboard?.totalTrackedCards ?? 0} | Sets: {dashboard?.totalSets ?? 0} | Sales:{" "}
+          {sync?.totals.sales.toLocaleString() ?? 0}
+        </div>
+
+        <section className="rounded-xl border border-slate-200 p-3">
+          <h3 className="font-semibold">Billing and Entitlements</h3>
+          <p className="mt-1 text-sm text-slate-600">
+            Current plan {sync?.subscription.tier ?? user.subscriptionTier} (
+            {sync?.subscription.status ?? user.subscriptionStatus})
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button className="rounded border border-slate-300 px-3 py-1 text-sm" onClick={() => changePlan("FREE")} disabled={planBusy}>
+              Free
+            </button>
+            <button className="rounded border border-cyan-300 bg-cyan-50 px-3 py-1 text-sm" onClick={() => changePlan("PRO")} disabled={planBusy}>
+              Pro
+            </button>
+            <button className="rounded border border-indigo-300 bg-indigo-50 px-3 py-1 text-sm" onClick={() => changePlan("ELITE")} disabled={planBusy}>
+              Elite
+            </button>
+            <button className="rounded border border-emerald-300 bg-emerald-50 px-3 py-1 text-sm" onClick={openBillingPortal}>
+              Billing Portal
+            </button>
+          </div>
+        </section>
+
+        <section className="rounded-xl border border-slate-200 p-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="font-semibold">Background Sync + Queue</h3>
+            <input className="w-24 rounded border px-2 py-1 text-sm" type="number" value={syncPageLimit} onChange={(e) => setSyncPageLimit(Number(e.target.value))} />
+            {user.role === "ADMIN" && can("LIVE_SYNC_QUEUE") ? (
+              <>
+                <button className="rounded bg-emerald-700 px-3 py-1 text-sm text-white" onClick={() => runSync("catalog")} data-testid="queue-catalog">Queue Catalog</button>
+                <button className="rounded bg-cyan-700 px-3 py-1 text-sm text-white" onClick={() => runSync("sales")} data-testid="queue-sales">Queue Sales</button>
+                {can("DIRECT_TCGPLAYER_SYNC") ? <button className="rounded bg-indigo-700 px-3 py-1 text-sm text-white" onClick={queueDirectTcgplayerSync}>Queue TCGplayer Direct</button> : null}
+                <button className="rounded bg-slate-900 px-3 py-1 text-sm text-white" onClick={runWorkerNow} data-testid="run-worker-tick">Run Worker Tick</button>
+              </>
+            ) : <p className="text-xs text-slate-500">Upgrade to Pro to run live sync jobs.</p>}
+          </div>
+          <p className="mt-2 text-sm text-slate-600">
+            Jobs: {sync?.jobs.configured ?? 0} configured | {sync?.jobs.queued ?? 0} queued | {sync?.jobs.running ?? 0} running
+          </p>
+        </section>
+
+        <section className="rounded-xl border border-slate-200 p-3">
+          <h3 className="mb-2 font-semibold">Scanner</h3>
+          {!can("CARD_SCANNER_TEXT") ? (
+            <p className="mb-2 text-sm text-slate-500">Upgrade to Pro to use card scanner.</p>
+          ) : null}
+          <div className="mb-3 flex flex-wrap gap-2">
+            <select
+              className="rounded border px-2 py-2"
+              value={scanDest}
+              onChange={(e) => setScanDest(e.target.value as "COLLECTION" | "WISHLIST" | "PRICE_CHECK")}
+              disabled={!can("CARD_SCANNER_TEXT")}
+            >
+              <option value="COLLECTION">Collection</option>
+              <option value="WISHLIST">Wishlist</option>
+              <option value="PRICE_CHECK">Price Check</option>
+            </select>
+            <input
+              className="rounded border px-2 py-2 text-sm"
+              type="file"
+              accept="image/*"
+              onChange={(event) => setScanImageFile(event.target.files?.[0] ?? null)}
+            />
+            <button
+              className="rounded bg-emerald-700 px-3 py-2 text-sm text-white disabled:opacity-60"
+              type="button"
+              onClick={runImageScan}
+              disabled={ocrBusy || !can("CARD_SCANNER_TEXT")}
+            >
+              {ocrBusy ? "Scanning..." : "Scan Photo"}
+            </button>
+          </div>
+          <form className="flex flex-wrap gap-2 border-t border-slate-200 pt-3" onSubmit={scanCard}>
+            <input
+              className="min-w-72 flex-1 rounded border px-3 py-2"
+              value={scanText}
+              onChange={(e) => setScanText(e.target.value)}
+              placeholder="Manual fallback: swsh7 215 Umbreon VMAX"
+              required
+              disabled={!can("CARD_SCANNER_TEXT")}
+            />
+            <button className="rounded bg-slate-900 px-3 py-2 text-white disabled:opacity-60" type="submit" disabled={!can("CARD_SCANNER_TEXT")}>
+              Scan Text
+            </button>
+          </form>
+          {scanResult ? (
+            <div className="mt-3 rounded border border-slate-200 bg-slate-50 p-3 text-sm">
+              <p className="font-medium">
+                Result: {scanResult.itemKind.replaceAll("_", " ")} | OCR confidence {(scanResult.ocr?.confidence ?? 0).toFixed(1)}
+              </p>
+              {scanResult.match?.card ? (
+                <p>
+                  Card: {scanResult.match.card.name} {scanResult.match.card.cardNumber} ({scanResult.match.card.setCode?.toUpperCase()})
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+        </section>
+
+        {user.role === "ADMIN" ? (
+          <section className="rounded-xl border border-slate-200 p-3">
+            <h3 className="mb-2 font-semibold">Email Outbox (Dev)</h3>
+            <div className="max-h-56 overflow-auto text-xs">
+              {outbox.length === 0 ? (
+                <p className="text-slate-500">No recent messages.</p>
+              ) : (
+                outbox.map((mail) => (
+                  <div key={mail.id} className="border-b py-2">
+                    <p>
+                      {mail.template} to {mail.to} at {new Date(mail.createdAt).toLocaleString()}
+                    </p>
+                    <p className="whitespace-pre-wrap text-slate-600">{mail.body}</p>
+                  </div>
+                ))
+              )}
+            </div>
+          </section>
         ) : null}
+      </div>
+    );
+  };
+
+  return (
+    <main className="mx-auto flex max-w-7xl flex-col gap-4 p-4 sm:p-8">
+      <section className="rounded-3xl border border-slate-200 bg-white/95 p-5 shadow-sm">
+        <div className="flex justify-end">
+          <button className="rounded border border-slate-300 px-3 py-1.5 text-sm text-slate-700" onClick={logout}>
+            Logout
+          </button>
+        </div>
+        <div className="flex flex-col items-center gap-3 text-center">
+          <h1 className="gem-title text-6xl font-bold leading-none tracking-wide sm:text-7xl">Gem Index</h1>
+          <Image
+            src="/gemindex-icon.png"
+            alt="Gem Index app icon"
+            width={160}
+            height={160}
+            priority
+            className="h-28 w-28 rounded-2xl border border-slate-200 object-cover shadow-lg sm:h-36 sm:w-36"
+          />
+          <p className="text-sm text-slate-600">
+            {user.name} ({user.role}) | {sync?.subscription.tier ?? user.subscriptionTier} plan
+          </p>
+          <p className="text-xs text-slate-600" data-testid="plan-badge">
+            Status: {sync?.subscription.status ?? user.subscriptionStatus}
+          </p>
+          <p className="text-xs">
+            <span
+              className={`inline-flex rounded-full px-2 py-0.5 font-medium ${sourceBadgeClass}`}
+              data-testid="data-source-badge"
+            >
+              Data Source: {dataQuality?.label ?? "Seeded"}
+            </span>
+          </p>
+          <div className="mt-2 w-full max-w-2xl text-left">
+            <label htmlFor="card-search" className="mb-1 block text-xs font-medium text-slate-700">
+              Search Pokemon Card
+            </label>
+            <input
+              id="card-search"
+              value={cardSearch}
+              onChange={(event) => {
+                setCardSearch(event.target.value);
+                setQuickCardId("");
+                setActiveTab("CARD_DETAILS");
+              }}
+              placeholder="Start typing a card name (example: Umbreon VMAX)"
+              className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm shadow-sm outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-200"
+            />
+          </div>
+          {message ? <p className="text-sm text-slate-700">{message}</p> : null}
+        </div>
       </section>
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-4">
-        <h2 className="mb-2 font-semibold">Quick Portfolio Actions</h2>
-        {!can("PORTFOLIO_TRACKING") ? (
-          <p className="mb-2 text-sm text-slate-500">Upgrade to Pro to track collection, wishlist, and sealed positions.</p>
-        ) : null}
-        <div className="grid gap-2 md:grid-cols-[2fr_2fr_auto_auto_auto]">
-          <select className="rounded border px-2 py-2 text-sm" value={quickCardId} onChange={(e) => setQuickCardId(e.target.value)} disabled={!can("PORTFOLIO_TRACKING")}>
-            {cards.map((card) => (
-              <option key={card.cardId} value={card.cardId}>{card.cardName} {card.cardNumber}</option>
+      <section className="grid gap-4 lg:grid-cols-[220px_1fr]">
+        <aside className="rounded-2xl border border-slate-200 bg-white p-3">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Tabs</p>
+          <nav className="flex flex-col gap-2">
+            {HOME_TABS.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`rounded-lg px-3 py-2 text-left text-sm font-medium ${
+                  activeTab === tab.id
+                    ? "bg-slate-900 text-white"
+                    : "border border-slate-200 bg-slate-50 text-slate-700"
+                }`}
+              >
+                {tab.label}
+              </button>
             ))}
-          </select>
-          <select className="rounded border px-2 py-2 text-sm" value={quickSetId} onChange={(e) => setQuickSetId(e.target.value)} disabled={!can("PORTFOLIO_TRACKING")}>
-            {sets.map((set) => (
-              <option key={set.setId} value={set.setId}>{set.name}</option>
-            ))}
-          </select>
-          <button className="rounded bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-60" onClick={quickAddCollection} disabled={!can("PORTFOLIO_TRACKING")} data-testid="quick-add-raw">Add Raw</button>
-          <button className="rounded bg-amber-600 px-3 py-2 text-sm text-white disabled:opacity-60" onClick={quickAddWishlist} disabled={!can("PORTFOLIO_TRACKING")} data-testid="quick-add-wish">Add Wish</button>
-          <button className="rounded bg-cyan-700 px-3 py-2 text-sm text-white disabled:opacity-60" onClick={quickAddSealed} disabled={!can("PORTFOLIO_TRACKING")} data-testid="quick-add-sealed">Add Sealed</button>
-        </div>
+          </nav>
+        </aside>
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-4">{renderActiveTab()}</div>
       </section>
     </main>
   );
